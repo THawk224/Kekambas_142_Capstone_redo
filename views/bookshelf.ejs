@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Bookshelf</title>
+    <style>
+        /* Add some basic styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #8383c8; 
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        button {
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome <%= user.username %>!</h1>
+    <button onclick="location.href='/logout'">Logout</button>
+
+    <h2>Your Books</h2>
+    <div id='book-list'>
+    <% if (books.length > 0) { %>
+        <ul>
+            <% books.forEach(book => { %>
+                <li>
+                    <%= book.title %> by <%= book.author %>, <%= book.genre %>
+                    <button class="edit-book" data-book-id="<%= book.id %>">Edit</button>
+                    <button class="delete-book" data-book-id="<%= book.id %>">Delete</button>
+                </li>
+            <% }) %>
+        </ul>
+    <% } else { %>
+        <p>You have no books in your bookshelf. Please add some books to your shelf.</p>
+    <% } %>
+    </div>
+
+    <form id="book-form">
+        <h2>Add a New Book</h2>
+        <input type="hidden" id="book-id" value="">
+        <input type="hidden" id="form-mode" value="new">
+        <label for="title">Title:</label>
+        <input type="text" id="title" name="title" placeholder="Title" required>
+        <br>
+        <label for="author">Author:</label>
+        <input type="text" id="author" name="author" placeholder="Author" required>
+        <br>
+        <label for="genre">Genre:</label>
+        <input type="text" id="genre" name="genre" placeholder="Genre" required>
+        <br>
+        <button type="submit" id="save-book">Save Book</button>
+    </form>
+
+    <script>
+        const token = '<%= token %>'; // Get the token from the server-side data
+        const booksJSON = '<%- booksJSON %>'; // Get the books array from the server-side data //issues not working together w server.js line 157
+        console.log('books', booksJSON, typeof booksJSON);
+        const books = JSON.parse(booksJSON);
+        // Existing JavaScript code for book CRUD operations
+        document.getElementById('book-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = document.getElementById('book-form');
+            const title = document.getElementById('title').value;
+            const author = document.getElementById('author').value;
+            const genre = document.getElementById('genre').value;
+            const bookId = document.getElementById('book-id').value;
+            const mode = document.getElementById('form-mode').value;
+
+            const endpoint = mode === 'new' ? '/books' : `/books/${bookId}`;
+            const method = mode === 'new' ? 'POST' : 'PUT';
+            const token = '<%= token %>'; // Get the token from the server-side data
+            // const books = <%- JSON.stringify(books) %>; // Get the books array from the server-side data
+            const books = '<%= books %>'; // Get the books array from the server-side data
+
+            fetch(endpoint, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ title, author, genre }),
+                credentials: 'include' // Include credentials (e.g., cookies) in the request
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data);
+                loadBooks(); // Reload the list of books
+                form.reset(); // Reset the form after submission
+                document.getElementById('book-id').value = ''; // Clear book id
+                document.getElementById('form-mode').value = 'new'; // Reset the form mode to new
+                window.location.reload(); // Reload the page to reflect changes
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        // New code to handle book editing and deletion
+        const bookList = document.getElementById('book-list');
+        bookList.addEventListener('click', function(e) {
+            if (e.target.classList.contains('edit-book')) {
+                const bookId = e.target.dataset.bookId;
+                console.log(books);
+                const book = books.find(book => book.id === parseInt(bookId));
+                if (book) {
+                    document.getElementById('title').value = book.title;
+                    document.getElementById('author').value = book.author;
+                    document.getElementById('genre').value = book.genre;
+                    document.getElementById('book-id').value = book.id;
+                    document.getElementById('form-mode').value = 'update';
+                }
+            } else if (e.target.classList.contains('delete-book')) {
+                const bookId = e.target.dataset.bookId;
+                const token = '<%= token %>'; // Get the token from the server-side data
+
+                fetch(`/books/${bookId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    credentials: 'include' // Include credentials (e.g., cookies) in the request
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(response.statusText);
+                    }
+                    console.log('Book deleted');
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(data);
+                    loadBooks(); // Reload the list of books
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        });
+
+        // Function to load and display the list of books
+        function loadBooks() {
+            const token = '<%= token %>'; // Get the token from the server-side data
+            fetch('/books', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                credentials: 'include' // Include credentials (e.g., cookies) in the request
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+                return response.json();
+            })
+            .then(books => {
+                console.log('here:', books);
+                const bookListDiv = document.getElementById('book-list');
+                bookListDiv.innerHTML = '';
+                if(books.length === 0) {
+                    bookListDiv.innerHTML = '<p>You have no books in your bookshelf. Please add some books to your shelf.</p>';
+                }
+                const bookList = document.createElement('ul')
+                bookListDiv.appendChild(bookList);
+                books.forEach(book => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `${book.title} by ${book.author} (${book.genre})`;
+                    const editButton = document.createElement('button');
+                    editButton.textContent = 'Edit';
+                    editButton.classList.add('edit-book');
+                    editButton.dataset.bookId = book.id;
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.classList.add('delete-book');
+                    deleteButton.dataset.bookId = book.id;
+                    li.appendChild(editButton);
+                    li.appendChild(deleteButton);
+                    bookList.appendChild(li);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Initial load of books
+        loadBooks();
+    </script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookshelf</title>
+</head>
+<body>
+    <h1>Welcome, <%= user.username %>!</h1>
+    <h2>My Bookshelf</h2>
+    <ul id="bookshelf"></ul>
+
+    <script>
+//         // Fetch the logged-in user's bookshelf data
+//         fetch('/books', {
+//             headers: {
+//                 'Authorization': 'Bearer <%= token %>'
+//             }
+//         })
+//         .then(response => response.json())
+//         .then(books => {
+//             const bookshelfList = document.getElementById('bookshelf');
+//             books.forEach(book => {
+//                 const listItem = document.createElement('li');
+//                 listItem.textContent = `${book.title} by ${book.author} (${book.genre})`;
+//                 bookshelfList.appendChild(listItem);
+//             });
+//         })
+//         .catch(error => console.error('Error fetching bookshelf:', error));
+//     </script>
+// </body>
+// </html>
+
+// Fetch the logged-in user's bookshelf data
+        fetch('/books', {
+            headers: {
+                'Authorization': 'Bearer <%= token %>'
+            }
+        })
+        .then(response => response.json())
+        .then(books => {
+            const bookshelfList = document.getElementById('bookshelf');
+            bookshelfList.innerHTML = ''; // Clear the existing list
+
+            if (books && books.length > 0) {
+                books.forEach(book => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = `${book.title} by ${book.author} (${book.genre})`;
+                    bookshelfList.appendChild(listItem);
+                });
+            } else {
+                const noBooks = document.createElement('li');
+                noBooks.textContent = 'No books found.';
+                bookshelfList.appendChild(noBooks);
+            }
+        })
+        .catch(error => console.error('Error fetching bookshelf:', error));
+    </script>
+</body>
+</html> -->
+
+
